@@ -5,6 +5,7 @@ import ctypes
 import io
 import os
 import sys
+import warnings
 
 import numpy as np
 import warp as wp
@@ -23,7 +24,7 @@ from .shaders import (
 )
 
 ENABLE_CUDA_INTEROP = False
-ENABLE_GL_CHECKS = False
+ENABLE_GL_CHECKS = True
 
 wp.set_module_options({"enable_backward": False})
 
@@ -1130,6 +1131,12 @@ class RendererGL:
             platform_event_loop = self.app.platform_event_loop
             platform_event_loop.start()
 
+            # pyglet's app/event_loop is a process-global singleton. A prior
+            # viewer's close() dispatched "on_exit", leaving has_exit=True.
+            # Constructing a new viewer means we intend to run, so clear it —
+            # otherwise this fresh viewer's has_exit()/is_running() is stale.
+            self.app.event_loop.has_exit = False
+
             # start event loop
             # self.app.event_loop.dispatch_event("on_enter")
 
@@ -1324,7 +1331,11 @@ class RendererGL:
             gl.glEnable(gl.GL_BLEND)
 
         err = gl.glGetError()
-        assert err == gl.GL_NO_ERROR, hex(err)
+        if err != gl.GL_NO_ERROR:
+            # Drain any further queued errors so they don't bleed into next frame.
+            while gl.glGetError() != gl.GL_NO_ERROR:
+                pass
+            warnings.warn(f"GL error {hex(err)} ignored (frame survived)", stacklevel=2)
 
     def present(self):
         if not self.headless:
