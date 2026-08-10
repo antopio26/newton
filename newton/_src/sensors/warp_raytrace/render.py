@@ -204,6 +204,15 @@ def create_kernel(
                     )
 
                     albedo_color = wp.cw_mul(albedo_color, tex_color)
+        elif closest_hit.shape_index < raytrace.MAX_SHAPE_ID:
+            # Gaussian splats have no separate unlit-material/lit-result
+            # distinction the way meshes do -- their baked SH color (already
+            # resolved into closest_hit.color by the closest-hit pass) IS
+            # their albedo. Previously left at the wp.vec3f(0.0) default
+            # above, so any Gaussian hit rendered as solid black in
+            # render_albedo output specifically, even though render_color
+            # already read the correct value via closest_hit.color below.
+            albedo_color = closest_hit.color
 
         if wp.static(state.render_albedo):
             out_albedo[out_index] = tiling.pack_rgba_to_uint32(albedo_color, 1.0)
